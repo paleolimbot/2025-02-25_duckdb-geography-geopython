@@ -12,60 +12,189 @@ format:
 ---
 
 ```{r setup, include = FALSE}
+library(s2)
 reticulate::use_virtualenv(file.path(getwd(), ".venv"), required = TRUE)
 ```
 
-## {background="#2556BB"}
+## duckdb-geography {background-image="bg/wb3.png"}
 
-<br/>
+In a nutshell:
 
-<br/>
+```{python}
+#| echo: true
+import duckdb
+con = duckdb.connect()
 
-::: {style="text-align: center;"}
+con.install_extension("geography", repository="community")
 
-### Snowflake Python Connector
-
-<br/>
-
-### GeoArrow
-
-<br/>
-
-### cudf
-
-:::
-
-## Snowflake Python Connector {background-image="bg/wb3.png"}
-
-- Wire protocol is Arrow IPC-based, but is more like an Arrow representation of the Snowflake internal representation
-- Needs compute functions to export Pandas, Arrow, Python objects (dbapi)
-- Used Arrow C++, which resulted in a pinned pyarrow version dependency
-
-```python
-import snowflake.connector
-
-con = snowflake.connector.connect(...)
-cur = con.cursor()
-cur.execute("SELECT * FROM testtable")
-cur.fetchall().to_arrow()
+con.load_extension("geography")
+con.table_function("s2_data_cities").limit(3)
 ```
 
-## nanoarrow {background-image="bg/wb3.png"}
+
+## Data types: Geography
+
+A Geography is a Geometry whose edges follow a the shortest distance on the Earth rather than the shortest distance in Cartesian/planar space
+
+If you want to represent something like Fiji, Russia, or Antarctica without splitting it into pieces, you need Geography!
+
+## Data types: Geography
 
 :::: {.columns}
 
 ::: {.column width="50%"}
 
-- [dewey.dunnington.ca/slides/scipy2024](https://dewey.dunnington.ca/slides/scipy2024)
-- {{< fa brands github >}} [apache/arrow-nanoarrow](https://github.com/apache/arrow-nanoarrow)
-- {{< fa globe >}} [arrow.apache.org/nanoarrow](https://arrow.apache.org/nanoarrow)
+Spherely array:
+
+- Order is kept
+- In memory data structures
+- Requires explicit parallelization
 
 :::
 
 ::: {.column width="50%"}
 
-Foofy
+DuckDB Geography:
+
+- Order is sometimes kept
+- Serialized data structures (can be slower)
+- Automatic parallelization
 
 :::
 
 ::::
+
+## Data types: S2 Cell
+
+```{python}
+#| echo: true
+con.sql("""
+SELECT s2_cellfromlonlat(7.64, 47.53).s2_cell_parent(level)
+FROM (VALUES (5), (4), (3), (2), (1), (0)) levels(level)
+""")
+```
+
+##
+
+
+```{r}
+#| fig-asp: 1
+#| fig-width: 6
+#| fig-align: center
+
+base_plot <- function() {
+  last_plot_env <- s2:::last_plot_env
+  last_plot_env$centre <- s2_lnglat(7.64, 47.53)
+  par(mai = rep(0, 4))
+  plot(double(), double(), xlim = c(-1, 1), ylim = c(-1, 1), axes = FALSE, asp = 1, xlab = "", ylab = "")
+  s2_plot(
+    s2_data_countries(),
+    centre = s2_lnglat(7.64, 47.53),
+    plot_hemisphere = TRUE,
+    lwd = 0.8,
+    add = TRUE
+  )
+}
+
+our_cells_plot <- function() {
+  for (level in 5:0) {
+    s2_lnglat(8, 46) |>
+      as_s2_cell() |>
+        s2_cell_parent(level) |>
+        as_s2_cell_union() |>
+        as_s2_geography() |>
+        s2_plot(add = TRUE, simplify = FALSE, lwd = 1.5, border = "blue")
+  }
+}
+
+base_plot()
+our_cells_plot()
+```
+
+## Data types: S2 Cell
+
+S2 Cells are represented by `uint64_t` and have an important property: **containment can be calculated using a simple comparison**
+
+::: {style="font-size: 90%;"}
+
+```{python}
+#| echo: true
+con.sql("""
+SELECT c, s2_cell_range_min(c), s2_cell_range_max(c)
+FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
+""")
+```
+
+:::
+
+(...because computers are much better at simple comparisons than spatial ones!)
+
+## Data types: S2 Cell Center
+
+```{python}
+#| echo: true
+(
+    con
+    .table_function("s2_data_cities")
+    .select("geog")
+    .limit(5)
+)
+```
+
+## Data types: S2 Cell Center
+
+```{python}
+#| echo: true
+(
+    con
+    .table_function("s2_data_cities")
+    .select("geog::S2_CELL_CENTER AS cell")
+    .limit(5)
+)
+```
+
+## Data types: S2 Cell Union
+
+```{python}
+#| echo: true
+con.sql("SELECT s2_data_country('Switzerland').s2_covering()")
+```
+
+## Data types: S2 Cell Union
+
+```{python}
+#| echo: true
+#| eval: false
+con.sql("SELECT s2_data_country('Switzerland').s2_covering()")
+```
+
+```{r}
+#| fig-align: center
+
+par(mai = rep(0, 4))
+covering <- unclass(s2_covering_cell_ids(s2_data_countries("Switzerland")))[[1]] |> lapply(as_s2_cell_union)
+covering <- do.call(c, as.list(covering))
+s2_plot(covering, border = "blue")
+s2_plot(s2_data_countries(), add = TRUE, lwd = 0.8)
+s2_plot(covering, border = "blue", add = TRUE)
+```
+
+## Practical example: using S2 cells to do a join
+
+- https://dewey.dunnington.ca/post/2024/wrangling-and-joining-130m-points-with-duckdb--the-open-source-spatial-stack/#duckdb-geography
+- https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level
+
+## duckdb-geography {background-image="bg/wb3.png"}
+
+- [dewey.dunnington.ca/slides/geopython2025](https://dewey.dunnington.ca/slides/geopython2025)
+- {{< fa brands github >}} [paleolimbot/duckdb-geography](https://github.com/paleolimbot/duckdb-geography)
+- {{< fa globe >}} [duckdb.org/community_extensions](https://duckdb.org/community_extensions/extensions/geography.html)
+
+```python
+import duckdb
+duckdb.install_extension("geography", repository="community")
+```
+
+```sql
+INSTALL geography FROM community;
+```
