@@ -1,0 +1,71 @@
+---
+title: "duckdb-geography: Global vector data in DuckDB"
+subtitle: ""
+author: "Dewey Dunnington, Wherobots Inc."
+institute: ""
+format:
+  revealjs:
+    embed-resources: true
+    title-slide-attributes:
+      data-background-image: bg/wb0.png
+      data-background-color: "#2556BB"
+---
+
+```{r setup, include = FALSE}
+reticulate::use_virtualenv(file.path(getwd(), ".venv"), required = TRUE)
+```
+
+## {background="#2556BB"}
+
+<br/>
+
+<br/>
+
+::: {style="text-align: center;"}
+
+### Snowflake Python Connector
+
+<br/>
+
+### GeoArrow
+
+<br/>
+
+### cudf
+
+:::
+
+## Snowflake Python Connector {background-image="bg/wb3.png"}
+
+- Wire protocol is Arrow IPC-based, but is more like an Arrow representation of the Snowflake internal representation
+- Needs compute functions to export Pandas, Arrow, Python objects (dbapi)
+- Used Arrow C++, which resulted in a pinned pyarrow version dependency
+
+```python
+import snowflake.connector
+
+con = snowflake.connector.connect(...)
+cur = con.cursor()
+cur.execute("SELECT * FROM testtable")
+cur.fetchall().to_arrow()
+```
+
+## nanoarrow {background-image="bg/wb3.png"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+- [dewey.dunnington.ca/slides/scipy2024](https://dewey.dunnington.ca/slides/scipy2024)
+- {{< fa brands github >}} [apache/arrow-nanoarrow](https://github.com/apache/arrow-nanoarrow)
+- {{< fa globe >}} [arrow.apache.org/nanoarrow](https://arrow.apache.org/nanoarrow)
+
+:::
+
+::: {.column width="50%"}
+
+Foofy
+
+:::
+
+::::
