@@ -16,6 +16,26 @@ library(s2)
 reticulate::use_virtualenv(file.path(getwd(), ".venv"), required = TRUE)
 ```
 
+## Me {background-image="bg/wb3.png"}
+
+::: {style="text-align: center;"}
+
+![](logo/arrow-hex.png){width="20%"} ![](logo/nanoarrow-hex.png){width="20%"} ![](logo/geoarrow_logo.png){width="20%"} ![](logo/sf.gif){width="20%"}
+
+:::
+
+::: {style="text-align: center;"}
+
+![](logo/sedona_logo.png){width="70%"}
+
+:::
+
+::: {style="text-align: center;"}
+
+![](logo/wherobots.png){width="50%"}
+
+:::
+
 ## duckdb-geography {background-image="bg/wb3.png"}
 
 In a nutshell:
@@ -31,14 +51,33 @@ con.load_extension("geography")
 con.table_function("s2_data_cities").limit(3)
 ```
 
+## {background="#2556BB"}
 
-## Data types: Geography
+<br/>
+
+<br/>
+
+::: {style="text-align: center;"}
+
+### Data Types
+
+<br/>
+
+### Examples
+
+<br/>
+
+### Wrap Up
+
+:::
+
+## Data types: Geography {background-image="bg/wb3.png"}
 
 A Geography is a Geometry whose edges follow a the shortest distance on the Earth rather than the shortest distance in Cartesian/planar space
 
 If you want to represent something like Fiji, Russia, or Antarctica without splitting it into pieces, you need Geography!
 
-## Data types: Geography
+## Data types: Geography {background-image="bg/wb3.png"}
 
 :::: {.columns}
 
@@ -64,7 +103,7 @@ DuckDB Geography:
 
 ::::
 
-## Data types: S2 Cell
+## Data types: S2 Cell {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
@@ -111,7 +150,7 @@ base_plot()
 our_cells_plot()
 ```
 
-## Data types: S2 Cell
+## Data types: S2 Cell {background-image="bg/wb3.png"}
 
 S2 Cells are represented by `uint64_t` and have an important property: **containment can be calculated using a simple comparison**
 
@@ -129,7 +168,7 @@ FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
 
 (...because computers are much better at simple comparisons than spatial ones!)
 
-## Data types: S2 Cell Center
+## Data types: S2 Cell Center {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
@@ -141,7 +180,7 @@ FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
 )
 ```
 
-## Data types: S2 Cell Center
+## Data types: S2 Cell Center {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
@@ -153,14 +192,14 @@ FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
 )
 ```
 
-## Data types: S2 Cell Union
+## Data types: S2 Cell Union {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
 con.sql("SELECT s2_data_country('Switzerland').s2_covering()")
 ```
 
-## Data types: S2 Cell Union
+## Data types: S2 Cell Union {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
@@ -179,7 +218,31 @@ s2_plot(s2_data_countries(), add = TRUE, lwd = 0.8)
 s2_plot(covering, border = "blue", add = TRUE)
 ```
 
-## Practical example: using S2 cells to do a join
+## {background="#2556BB"}
+
+<br/>
+
+<br/>
+
+::: {style="text-align: center;"}
+
+### Paralellizing a trivial workflow
+
+<br/>
+
+### Partitioning
+
+<br/>
+
+### Joining
+
+:::
+
+## Hands on: Parallelizing a workflow
+
+## Hands on: Partitioning
+
+## Hands on: Joining
 
 - https://dewey.dunnington.ca/post/2024/wrangling-and-joining-130m-points-with-duckdb--the-open-source-spatial-stack/#duckdb-geography
 - https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level
@@ -190,10 +253,14 @@ s2_plot(covering, border = "blue", add = TRUE)
 - {{< fa brands github >}} [paleolimbot/duckdb-geography](https://github.com/paleolimbot/duckdb-geography)
 - {{< fa globe >}} [duckdb.org/community_extensions](https://duckdb.org/community_extensions/extensions/geography.html)
 
+Install from Python:
+
 ```python
 import duckdb
 duckdb.install_extension("geography", repository="community")
 ```
+
+Install from SQL:
 
 ```sql
 INSTALL geography FROM community;
