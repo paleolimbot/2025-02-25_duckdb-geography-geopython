@@ -316,9 +316,149 @@ geopandas.GeoSeries.from_wkb(tab["geom"]).plot(edgecolor="black", facecolor="non
 
 ## Hands on: Partitioning
 
-There are [more advanced ways to use DuckDB to do this](https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level) (e.g., adapting the cell level to the number of points in each cell to better balance them)
+There are [more advanced ways to use DuckDB to do this](https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level)
+
+![](partitioning-ideal.png){fig-align="center"}
 
 A KDBTree is often better (the next release of Apache Sedona will let you partition and write files like this)
+
+## Hands on: Joining
+
+Let's count these by zipcode ~using geopandas~
+
+```python
+import geopandas
+zipcodes_df = geopandas.read_file("us-zip-codes.fgb")
+buildings_df = geopandas.read_parquet("microsoft-buildings-point.parquet")
+sindex = buildings_df.geometry.sindex
+result = sindex.query(zipcodes_df, predicate="contains")
+counts = pd.Index(pd.Series(chunk.index).iloc[result[0]]).value_counts(sort=False)
+```
+
+(You might run out of memory)
+
+## Hands on: Joining
+
+Let's count these by zipcode ~using PostGIS~
+
+```sql
+SELECT zipcodes.zipcode, count(*) as numpoints
+FROM zipcodes
+JOIN buildings ON ST_Contains(zipcodes.geom, buildings.geom)
+GROUP BY zipcodes.zipcode
+```
+
+(Getting the data into the database takes longer than the computation)
+
+## Hands on: Joining
+
+Let's count these by zipcode ~using DuckDB spatial~
+
+```sql
+WITH
+  buildings AS SELECT * FROM "microsoft-buildings_point_geo.parquet",
+  zipcodes AS SELECT * FROM "us-zip-codes.parquet"
+SELECT zipcodes.zipcode, count(*) as numpoints
+FROM zipcodes
+JOIN buildings ON ST_Contains(zipcodes.geom, buildings.geom)
+GROUP BY zipcodes.zipcode
+```
+
+(DuckDB can't use an index for a join yet!)
+
+## Hands on: Joining
+
+Let's count these by zipcode using WherobotsDB!
+
+```python
+config = SedonaContext.builder().getOrCreate()
+sedona = SedonaContext.create(config)
+sedona.read.format("shapefile").load("us-zip-codes.parquet")\
+    .createOrReplaceTempView("zipcodes")
+sedona.read.format("geoparquet").load("microsoft-buildings_point_geo.parquet")\
+    .createOrReplaceTempView("buildings")
+sedona.sql("""
+    SELECT zipcodes.zipcode as zipcode, count(*) as numpoints
+    FROM zipcodes
+    JOIN buildings ON ST_Contains(zipcodes.geometry, buildings.geom)
+    GROUP BY zipcode""")
+```
+
+## Hands on: Joining
+
+Let's count these by zipcode using DuckDB-geography!
+
+```{python}
+#| echo: true
+#| results: hide
+dont_print = con.sql("""
+  SELECT
+    zipcode,
+    geom.st_aswkb().s2_geogfromwkb() AS geog,
+    geog.s2_covering() AS covering
+  FROM "us-zip-codes.parquet"
+""").to_view("zipcodes_original")
+```
+
+...by using S2 cells as something that DuckDB knows how to optimize into a join.
+
+## Hands on: Joining
+
+```{python}
+#| echo: true
+#| eval: false
+con.sql("""
+  SELECT
+    zipcode,
+    geom.st_aswkb().s2_geogfromwkb().s2_prepare() AS geog,
+    geog.s2_covering() AS covering
+  FROM "us-zip-codes.parquet"
+""").to_view("zipcodes_original")
+```
+
+```{python, include=FALSE}
+con.table("zipcodes_original").limit(1)
+```
+
+```
+┌─────────┬──────────────────────┬────────────────────────────────────────────────────────┐
+│ zipcode │         geog         │                        covering                        │
+│ varchar │      geography       │                     s2_cell_union                      │
+├─────────┼──────────────────────┼────────────────────────────────────────────────────────┤
+│ 15301   │ <S2ShapeIndex 9666…  │ [4/1001220212, 4/1001220221, 4/100122022211, 4/10012…  │
+└─────────┴──────────────────────┴────────────────────────────────────────────────────────┘
+```
+
+## Hands on: Joining
+
+```{python}
+con.sql("""
+  CREATE OR REPLACE VIEW zipcodes AS
+  SELECT
+    unnest(covering) as cell,
+    zipcode,
+    geog,
+    cell.s2_cell_range_min() AS cell_min,
+    cell.s2_cell_range_max() AS cell_max
+  FROM zipcodes""")
+```
+
+```{python, include = FALSE}
+con.view("zipcodes").limit(1)
+```
+
+```
+┌──────────────┬─────────┬──────────────────────┬──────────────────────┬────────────────────────────┐
+│     cell     │ zipcode │         geog         │       cell_min       │          cell_max          │
+│   s2_cell    │ varchar │      geography       │       s2_cell        │          s2_cell           │
+├──────────────┼─────────┼──────────────────────┼──────────────────────┼────────────────────────────┤
+│ 4/1001220212 │ 15301   │ <S2ShapeIndex 9666…  │  4/1001220212000000… │  4/1001220212333333333333… │
+└──────────────┴─────────┴──────────────────────┴──────────────────────┴────────────────────────────┘
+```
+
+## Hands on: Joining
+
+
 
 ## Hands on: Joining
 
