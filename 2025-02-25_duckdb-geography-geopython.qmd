@@ -51,6 +51,12 @@ con.load_extension("geography")
 con.table_function("s2_data_cities").limit(3)
 ```
 
+```{python setup2, include = FALSE}
+# import geoarrow.pyarrow as ga
+con.load_extension("spatial")
+# con.sql("CALL register_geoarrow_extensions()")
+```
+
 ## {background="#2556BB"}
 
 <br/>
@@ -240,12 +246,83 @@ s2_plot(covering, border = "blue", add = TRUE)
 
 ## Hands on: Parallelizing a workflow
 
+::: {style="font-size: 70%;"}
+
+```{python}
+#| echo: true
+con.sql("""
+SELECT s2_bounds_box_agg(geog) FROM s2_data_countries()
+WHERE continent IN ('Oceania', 'Asia', 'Antarctica')
+GROUP BY continent
+""")
+```
+
+:::
+
+## Hands on: Parallelizing a workflow
+
+Most useful for tasks that won't benefit from a spatial index and benefit from automagic global handling:
+
+- `s2_bounds_box()` and `s2_bounds_box_agg()`
+- `s2_area()`, `s2_distance()`, `s2_perimeter()`
+- `s2_covering()`
+- `::S2_CELL_CENTER`
+
+For other tasks, consider DuckDB Spatial (if you don't need an index to assist with a join), PostGIS, or Apache Sedona (if you do).
+
 ## Hands on: Partitioning
+
+Take a porentially larger-than-memory dataset and split it into chunks based on location
+
+```{python}
+#| echo: true
+con.load_extension("spatial")
+con.sql("""
+SELECT
+  geometry.st_aswkb()
+  .s2_arbitrarycellfromwkb().s2_cell_parent(3)
+  .s2_cell_token() AS cell,
+  *
+FROM "microsoft-buildings_point_geo.parquet"
+""").write_parquet(
+  "microsoft-buildings-partitioned",
+  partition_by=["cell"],
+  overwrite=True
+)
+```
+
+## Hands on: Partitioning
+
+```{bash}
+#| echo: true
+ls -lh microsoft-buildings-partitioned/**/*.parquet
+```
+
+## Hands on: Partitioning
+
+```{python}
+import geopandas
+
+tab = con.read_parquet(
+  "microsoft-buildings-partitioned/*/*.parquet",
+  filename=True
+).aggregate(
+  "st_extent_agg(geometry).st_aswkb() as geom",
+  "filename"
+).to_arrow_table()
+
+geopandas.GeoSeries.from_wkb(tab["geom"]).plot(edgecolor="black", facecolor="none")
+```
+
+## Hands on: Partitioning
+
+There are [more advanced ways to use DuckDB to do this](https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level) (e.g., adapting the cell level to the number of points in each cell to better balance them)
+
+A KDBTree is often better (the next release of Apache Sedona will let you partition and write files like this)
 
 ## Hands on: Joining
 
 - https://dewey.dunnington.ca/post/2024/wrangling-and-joining-130m-points-with-duckdb--the-open-source-spatial-stack/#duckdb-geography
-- https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level
 
 ## duckdb-geography {background-image="bg/wb3.png"}
 
