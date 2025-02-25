@@ -16,7 +16,7 @@ library(s2)
 reticulate::use_virtualenv(file.path(getwd(), ".venv"), required = TRUE)
 ```
 
-## Me {background-image="bg/wb3.png"}
+## Me {background-image="bg/wb4.png"}
 
 ::: {style="text-align: center;"}
 
@@ -54,7 +54,7 @@ con.table_function("s2_data_cities").limit(3)
 ```{python setup2, include = FALSE}
 # import geoarrow.pyarrow as ga
 con.load_extension("spatial")
-# con.sql("CALL register_geoarrow_extensions()")
+con.sql("CALL register_geoarrow_extensions()")
 ```
 
 ## {background="#2556BB"}
@@ -73,7 +73,7 @@ con.load_extension("spatial")
 
 <br/>
 
-### Wrap Up
+### The Future
 
 :::
 
@@ -108,6 +108,12 @@ DuckDB Geography:
 :::
 
 ::::
+
+## Data types: Geography {background-image="bg/wb4.png"}
+
+![](geography-is-coming.jpg){fig-align="center"}
+
+...to Iceberg, Parquet, and Apache Sedona (and already exists in Python, R, Snowflake, PostGIS, BigQuery, SQL Server, and elsewhere)
 
 ## Data types: S2 Cell {background-image="bg/wb3.png"}
 
@@ -172,7 +178,24 @@ FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
 
 :::
 
-(...because computers are much better at simple comparisons than spatial ones!)
+## Data types: S2 Cell {background-image="bg/wb3.png"}
+
+Cells are implicitly castable to Geography:
+
+```{python}
+#| echo: true
+#| eval: false
+con.sql("SELECT '2/0030'::S2_CELL::GEOGRAPHY AS geog")
+```
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                     geog                                     │
+│                                  geography                                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ POLYGON ((56.88865803962798 44.96817331739243, 63.57747534364858 46.882504…  │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Data types: S2 Cell Center {background-image="bg/wb3.png"}
 
@@ -198,20 +221,40 @@ FROM (VALUES ('2/0330'::S2_CELL)) cells(c)
 )
 ```
 
+## Data types: S2 Cell Center {background-image="bg/wb3.png"}
+
+```{python}
+#| echo: true
+(
+    con
+    .table_function("s2_data_cities")
+    .select("geog::S2_CELL_CENTER::GEOGRAPHY AS cell")
+    .limit(5)
+)
+```
+
 ## Data types: S2 Cell Union {background-image="bg/wb3.png"}
+
+::: {style="font-size: 90%;"}
 
 ```{python}
 #| echo: true
 con.sql("SELECT s2_data_country('Switzerland').s2_covering()")
 ```
 
-## Data types: S2 Cell Union {background-image="bg/wb3.png"}
+:::
+
+## Data types: S2 Cell Union {background-image="bg/wb4.png"}
+
+::: {style="font-size: 90%;"}
 
 ```{python}
 #| echo: true
 #| eval: false
 con.sql("SELECT s2_data_country('Switzerland').s2_covering()")
 ```
+
+:::
 
 ```{r}
 #| fig-align: center
@@ -222,6 +265,27 @@ covering <- do.call(c, as.list(covering))
 s2_plot(covering, border = "blue")
 s2_plot(s2_data_countries(), add = TRUE, lwd = 0.8)
 s2_plot(covering, border = "blue", add = TRUE)
+```
+
+## Data types: S2 Cell Union {background-image="bg/wb3.png"}
+
+Cells Unions are implicitly castable to Geography:
+
+```{python}
+#| echo: true
+#| eval: false
+con.sql("""
+    SELECT s2_data_country('Switzerland').s2_covering()::GEOGRAPHY
+""")
+```
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│        CAST(s2_covering(s2_data_country('Switzerland')) AS GEOGRAPHY)        │
+│                                  geography                                   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ POLYGON ((8.851494069127982 48.37854425883403, 7.289681472358652 48.488487…  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## {background="#2556BB"}
@@ -244,7 +308,7 @@ s2_plot(covering, border = "blue", add = TRUE)
 
 :::
 
-## Hands on: Parallelizing a workflow
+## Hands on: Parallelizing a workflow {background-image="bg/wb3.png"}
 
 ::: {style="font-size: 70%;"}
 
@@ -259,7 +323,7 @@ GROUP BY continent
 
 :::
 
-## Hands on: Parallelizing a workflow
+## Hands on: Parallelizing a workflow {background-image="bg/wb4.png"}
 
 Most useful for tasks that won't benefit from a spatial index and benefit from automagic global handling:
 
@@ -270,7 +334,7 @@ Most useful for tasks that won't benefit from a spatial index and benefit from a
 
 For other tasks, consider DuckDB Spatial (if you don't need an index to assist with a join), PostGIS, or Apache Sedona (if you do).
 
-## Hands on: Partitioning
+## Hands on: Partitioning {background-image="bg/wb3.png"}
 
 Take a porentially larger-than-memory dataset and split it into chunks based on location
 
@@ -298,7 +362,7 @@ FROM "microsoft-buildings_point_geo.parquet"
 ls -lh microsoft-buildings-partitioned/**/*.parquet
 ```
 
-## Hands on: Partitioning
+## Hands on: Partitioning {background-image="bg/wb3.png"}
 
 ```{python}
 import geopandas
@@ -307,14 +371,17 @@ tab = con.read_parquet(
   "microsoft-buildings-partitioned/*/*.parquet",
   filename=True
 ).aggregate(
-  "st_extent_agg(geometry).st_aswkb() as geom",
+  "st_extent_agg(geometry) as geom",
   "filename"
 ).to_arrow_table()
 
-geopandas.GeoSeries.from_wkb(tab["geom"]).plot(edgecolor="black", facecolor="none")
+(
+    geopandas.GeoDataFrame.from_arrow(tab)
+    .plot(edgecolor="black", facecolor="none")
+)
 ```
 
-## Hands on: Partitioning
+## Hands on: Partitioning {background-image="bg/wb4.png"}
 
 There are [more advanced ways to use DuckDB to do this](https://dewey.dunnington.ca/post/2024/partitioning-strategies-for-bigger-than-memory-spatial-data/#using-s2-cells-fixed-cell-level)
 
@@ -322,24 +389,28 @@ There are [more advanced ways to use DuckDB to do this](https://dewey.dunnington
 
 A KDBTree is often better (the next release of Apache Sedona will let you partition and write files like this)
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
-Let's count these by zipcode ~using geopandas~
+Let's count these by zipcode using geopandas?
 
-```python
+```{python}
+#| echo: true
+#| eval: false
 import geopandas
-zipcodes_df = geopandas.read_file("us-zip-codes.fgb")
-buildings_df = geopandas.read_parquet("microsoft-buildings-point.parquet")
+import pandas as pd
+
+zipcodes_df = geopandas.read_parquet("us-zip-codes.parquet")
+buildings_df = geopandas.read_parquet("microsoft-buildings_point_geo.parquet")
 sindex = buildings_df.geometry.sindex
-result = sindex.query(zipcodes_df, predicate="contains")
-counts = pd.Index(pd.Series(chunk.index).iloc[result[0]]).value_counts(sort=False)
+result = sindex.query(zipcodes_df.geometry, predicate="contains")
+counts = pd.Series(result[0]).value_counts(sort=False)
 ```
 
 (You might run out of memory)
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
-Let's count these by zipcode ~using PostGIS~
+Let's count these by by zipcode using PostGIS?
 
 ```sql
 SELECT zipcodes.zipcode, count(*) as numpoints
@@ -350,33 +421,35 @@ GROUP BY zipcodes.zipcode
 
 (Getting the data into the database takes longer than the computation)
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
-Let's count these by zipcode ~using DuckDB spatial~
+Let's count these by zipcode using DuckDB spatial?
 
 ```sql
 WITH
-  buildings AS SELECT * FROM "microsoft-buildings_point_geo.parquet",
-  zipcodes AS SELECT * FROM "us-zip-codes.parquet"
+  buildings AS (SELECT * FROM "microsoft-buildings_point_geo.parquet"),
+  zipcodes AS (SELECT * FROM "us-zip-codes.parquet")
 SELECT zipcodes.zipcode, count(*) as numpoints
 FROM zipcodes
-JOIN buildings ON ST_Contains(zipcodes.geom, buildings.geom)
+JOIN buildings ON ST_Contains(zipcodes.geom, buildings.geometry)
 GROUP BY zipcodes.zipcode
 ```
 
 (DuckDB can't use an index for a join yet!)
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
 Let's count these by zipcode using WherobotsDB!
 
 ```python
 config = SedonaContext.builder().getOrCreate()
 sedona = SedonaContext.create(config)
+
 sedona.read.format("shapefile").load("us-zip-codes.parquet")\
     .createOrReplaceTempView("zipcodes")
 sedona.read.format("geoparquet").load("microsoft-buildings_point_geo.parquet")\
     .createOrReplaceTempView("buildings")
+
 sedona.sql("""
     SELECT zipcodes.zipcode as zipcode, count(*) as numpoints
     FROM zipcodes
@@ -384,14 +457,15 @@ sedona.sql("""
     GROUP BY zipcode""")
 ```
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
 Let's count these by zipcode using DuckDB-geography!
 
 ```{python}
 #| echo: true
-#| results: hide
-dont_print = con.sql("""
+#| output: false
+#| eval: false
+con.sql("""
   SELECT
     zipcode,
     geom.st_aswkb().s2_geogfromwkb() AS geog,
@@ -400,9 +474,9 @@ dont_print = con.sql("""
 """).to_view("zipcodes_original")
 ```
 
-...by using S2 cells as something that DuckDB knows how to optimize into a join.
+...by using S2 cells as something that DuckDB knows how to optimize the join for.
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
 ```{python}
 #| echo: true
@@ -416,10 +490,6 @@ con.sql("""
 """).to_view("zipcodes_original")
 ```
 
-```{python, include=FALSE}
-con.table("zipcodes_original").limit(1)
-```
-
 ```
 ┌─────────┬──────────────────────┬────────────────────────────────────────────────────────┐
 │ zipcode │         geog         │                        covering                        │
@@ -429,22 +499,20 @@ con.table("zipcodes_original").limit(1)
 └─────────┴──────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
 ```{python}
+#| echo: true
+#| output: false
+#| eval: false
 con.sql("""
-  CREATE OR REPLACE VIEW zipcodes AS
   SELECT
     unnest(covering) as cell,
     zipcode,
     geog,
     cell.s2_cell_range_min() AS cell_min,
     cell.s2_cell_range_max() AS cell_max
-  FROM zipcodes""")
-```
-
-```{python, include = FALSE}
-con.view("zipcodes").limit(1)
+  FROM zipcodes_original""").to_table("zipcodes")
 ```
 
 ```
@@ -456,13 +524,51 @@ con.view("zipcodes").limit(1)
 └──────────────┴─────────┴──────────────────────┴──────────────────────┴────────────────────────────┘
 ```
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
+```{python}
+#| echo: true
+#| output: false
+#| eval: false
+con.sql("""
+    SELECT geometry.st_aswkb().s2_cellfromwkb() as cell
+    FROM "microsoft-buildings_point_geo.parquet"
+""").to_table("buildings")
+```
 
+```
+┌──────────────────────────────────┐
+│               cell               │
+│          s2_cell_center          │
+├──────────────────────────────────┤
+│ 4/030313311232030030032122121030 │
+│ 4/030313311232031331311131310220 │
+│ 4/030313311232031322310022111120 │
+└──────────────────────────────────┘
+```
 
-## Hands on: Joining
+## Hands on: Joining {background-image="bg/wb3.png"}
 
-- https://dewey.dunnington.ca/post/2024/wrangling-and-joining-130m-points-with-duckdb--the-open-source-spatial-stack/#duckdb-geography
+```{python}
+#| echo: true
+#| eval: false
+con.sql("""
+    SELECT zipcodes.zipcode, count(*) as numpoints
+    FROM buildings
+    LEFT JOIN zipcodes ON
+        zipcodes.cell_min <= buildings.cell
+        AND zipcodes.cell_max >= buildings.cell
+    WHERE s2_contains(zipcodes.geog, buildings.cell)
+    GROUP BY zipcode
+""")
+```
+
+## The Future
+
+- Better integration with `spatial` (e.g., `geog::GEOMETRY`)
+- Aggregators
+- Import/Export/Fix spherical geometry
+- Something else based on user experience?
 
 ## duckdb-geography {background-image="bg/wb3.png"}
 
