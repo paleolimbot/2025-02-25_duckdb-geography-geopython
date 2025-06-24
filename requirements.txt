@@ -1,1 +1,4 @@
-duckdb
+duckdb==1.2.0
+geopandas
+pyarrow
+matplotlib
